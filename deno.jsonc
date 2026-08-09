@@ -1,0 +1,29 @@
+{
+    // TODO(name): placeholder scope — rename before publishing.
+    "name": "@placeholder/grammy-i18next",
+    "version": "2.0.0-beta.0",
+    "lock": false,
+    "exports": {
+        ".": "./src/mod.ts"
+    },
+    "imports": {
+        "@grammyjs/debug": "jsr:@grammyjs/debug@^0.3.1",
+        "@grammyjs/grammy": "jsr:@grammyjs/grammy@^2.0.0-beta.6",
+        "@std/expect": "jsr:@std/expect@^1.0.16",
+        "i18next": "npm:i18next@^26.3.0"
+    },
+    "tasks": {
+        "check": "deno check ./src/ ./test/",
+        "test": "deno test --parallel -R ./test/",
+        "ok": "deno fmt --check && deno lint && deno task test && deno task check",
+        "fix": "deno fmt && deno lint --fix"
+    },
+    "fmt": {
+        "indentWidth": 4,
+        "proseWrap": "preserve",
+        "exclude": ["./test/fixtures/invalid/"]
+    },
+    "publish": {
+        "exclude": ["./test/", "./example/", "./.github/"]
+    }
+}

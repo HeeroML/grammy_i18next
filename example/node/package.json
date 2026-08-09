@@ -1,0 +1,14 @@
+{
+    "name": "grammy-i18next-example",
+    "private": true,
+    "type": "module",
+    "//": "NOTE: the plugin is not published yet. Once it is, install it with `npx jsr add @placeholder/grammy-i18next` (which also writes the .npmrc for the JSR registry).",
+    "dependencies": {
+        "@grammyjs/grammy": "npm:@jsr/grammyjs__grammy@^2.0.0-beta.6",
+        "@placeholder/grammy-i18next": "npm:@jsr/placeholder__grammy-i18next@^2.0.0-beta.0",
+        "i18next": "^26.3.0"
+    },
+    "scripts": {
+        "start": "node --experimental-strip-types bot.ts"
+    }
+}

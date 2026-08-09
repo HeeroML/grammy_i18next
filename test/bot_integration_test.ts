@@ -6,10 +6,12 @@ import { botInfo, messageUpdate, resources } from "./helpers.ts";
 
 type MyContext = I18nextFlavor<Context>;
 
-// Note: `bot.handleUpdate` creates a fresh `Api` per update, so a transformer
-// installed on `bot.api` would not intercept `ctx.send` (as of 2.0.0-beta.6).
-// Instead, we run the bot's composed middleware with our own context whose
-// `Api` records outgoing calls—this still covers the full middleware chain.
+// Note: grammY 2.0 intentionally made `bot.api` and `ctx.api` independent
+// (grammY commit 27dadcf5, "BREAKING: installing a plugin on `bot.api` no
+// longer affects `ctx.api` calls"), so stubbing `bot.api` cannot intercept
+// `ctx.send`. Instead, we run the bot's composed middleware with our own
+// context whose `Api` records outgoing calls—this still covers the full
+// middleware chain.
 function makeRunner(bot: Bot<MyContext>): {
     handle: (update: Update) => Promise<void>;
     sent: Record<string, unknown>[];

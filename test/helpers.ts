@@ -1,6 +1,6 @@
 import { Api, Context } from "@grammyjs/grammy";
 import type { Update, UserFromGetMe } from "@grammyjs/grammy/types";
-import type { Resource } from "i18next";
+import type { Namespace, Resource } from "i18next";
 import { I18next } from "../src/mod.ts";
 import type { I18nextFlavor, I18nextOptions } from "../src/mod.ts";
 
@@ -78,11 +78,14 @@ export function makePlugin(
     });
 }
 
-export async function applyMiddleware(
-    plugin: I18next,
+export async function applyMiddleware<Ns extends Namespace>(
+    plugin: I18next<Context, Ns>,
     ctx: I18nextFlavor<Context>,
     next: () => Promise<void> = () => Promise.resolve(),
 ): Promise<I18nextFlavor<Context>> {
-    await plugin.middleware()(ctx, next);
+    await plugin.middleware()(
+        ctx as unknown as I18nextFlavor<Context, Ns>,
+        next,
+    );
     return ctx;
 }

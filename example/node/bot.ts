@@ -3,7 +3,7 @@ import {
     I18next,
     type I18nextFlavor,
     loadLocales,
-} from "@placeholder/grammy-i18next";
+} from "@heeroml/grammy-i18next";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 

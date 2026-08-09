@@ -4,7 +4,7 @@ Internationalization for [grammY](https://grammy.dev) **2.0**, powered by [i18ne
 
 This plugin connects a shared i18next instance to your bot's middleware tree. For every update, it resolves the user's locale and installs a translation function bound to that locale as `ctx.t`, plus locale controls as `ctx.i18n`. Everything i18next can do—interpolation, plurals via `Intl.PluralRules`, namespaces, fallback languages, formatters, backends, typed translation keys—works exactly as documented by i18next, because the plugin wraps i18next instead of reimplementing it.
 
-> **Status:** targets `@grammyjs/grammy@2.0.0-beta.x`. grammY 2.0 is not released yet; this plugin follows the [plugin migration guidance](https://github.com/grammyjs/grammY/issues/709) (transformative context flavors, core-aligned tooling) and will be released together with grammY 2.0. The package name is a placeholder until publishing.
+> **Status:** targets `@grammyjs/grammy@2.0.0-beta.x` and is published as a prerelease (`2.0.0-beta.x`) on [JSR](https://jsr.io/@heeroml/grammy-i18next). grammY 2.0 is not released yet; this plugin follows the [plugin migration guidance](https://github.com/grammyjs/grammY/issues/709) (transformative context flavors, core-aligned tooling), and a stable version will land together with grammY 2.0. Should the grammY organization adopt this plugin, it will be republished under their scope and this package will be archived with a final version that re-exports the new one—migrating will be a one-line import change.
 
 ## Quick start
 
@@ -14,7 +14,7 @@ import {
     I18next,
     type I18nextFlavor,
     loadLocales,
-} from "@placeholder/grammy-i18next";
+} from "@heeroml/grammy-i18next";
 
 type MyContext = I18nextFlavor<Context>;
 
@@ -52,9 +52,9 @@ A runnable bot lives in [`example/deno`](./example/deno/bot.ts), and the same co
 The plugin runs on Deno, Node.js, and Bun. i18next itself is fully runtime-agnostic (it is published on [JSR](https://jsr.io/@i18next/i18next) and [npm](https://www.npmjs.com/package/i18next) with zero dependencies).
 
 ```sh
-deno add jsr:@placeholder/grammy-i18next
-npx  jsr add @placeholder/grammy-i18next
-bunx jsr add @placeholder/grammy-i18next
+deno add jsr:@heeroml/grammy-i18next
+npx  jsr add @heeroml/grammy-i18next
+bunx jsr add @heeroml/grammy-i18next
 ```
 
 ## Two ways to provide translations

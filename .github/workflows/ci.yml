@@ -3,7 +3,9 @@ name: CI
 on:
     push:
         branches: [main, master]
+        tags: ["v*"]
     pull_request:
+    workflow_dispatch:
 
 jobs:
     ok:
@@ -17,3 +19,21 @@ jobs:
               run: deno task ok
             - name: Validate JSR publishing
               run: deno publish --dry-run
+
+    # Publishes to JSR via OIDC (no tokens needed). Requires the package on
+    # jsr.io to be linked to this GitHub repository. Runs when a version tag
+    # is pushed, or manually via workflow_dispatch.
+    publish:
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        needs: ok
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - uses: actions/checkout@v4
+            - uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.x
+            - name: Publish to JSR
+              run: deno publish

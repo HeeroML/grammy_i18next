@@ -1,6 +1,5 @@
 {
-    // TODO(name): placeholder scope — rename before publishing.
-    "name": "@placeholder/grammy-i18next",
+    "name": "@heeroml/grammy-i18next",
     "version": "2.0.0-beta.0",
     "lock": false,
     // This project intentionally tracks brand-new grammY 2.0 betas, which are

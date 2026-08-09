@@ -216,6 +216,15 @@ export class I18next<
     async #ensureLanguageLoaded(locale: string): Promise<void> {
         const connector = this.instance.services?.backendConnector;
         if (connector?.backend == null) return;
+        const ns = this.#options.ns;
+        if (ns !== undefined) {
+            // Registers the bound namespaces in `options.ns` (and loads them
+            // for the current languages), so that `loadLanguages` below also
+            // fetches them for the negotiated locale. Without this, a
+            // namespace bound only via the plugin's `ns` option would never
+            // be requested from the backend.
+            await this.instance.loadNamespaces(ns as string | string[]);
+        }
         await this.instance.loadLanguages(locale);
     }
 

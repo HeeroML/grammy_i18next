@@ -89,6 +89,41 @@ Deno.test("loads negotiated languages from a lazy backend", async () => {
     expect(ctx.t("greeting")).toBe("Hello");
 });
 
+Deno.test("loads namespaces bound only via the ns option from a backend", async () => {
+    const requested: string[] = [];
+    const data: Record<string, Record<string, object>> = {
+        en: { main: { greeting: "Hello" } },
+        de: { main: { greeting: "Hallo" } },
+    };
+    const backend = {
+        type: "backend" as const,
+        init(): void {},
+        read(
+            language: string,
+            namespace: string,
+            callback: (error: unknown, resources?: object) => void,
+        ): void {
+            requested.push(`${language}:${namespace}`);
+            callback(null, data[language]?.[namespace] ?? {});
+        },
+    };
+    const instance = i18next.createInstance().use(backend as never);
+    // "main" is bound only through the plugin's `ns` option; it is absent
+    // from the i18next init options, so the plugin must register and load it.
+    const plugin = new I18next({
+        i18next: instance,
+        initOptions: { fallbackLng: "en" },
+        ns: "main",
+    });
+
+    const ctx = await applyMiddleware(
+        plugin,
+        makeContext(messageUpdate("hi", "de")),
+    );
+    expect(requested).toContain("de:main");
+    expect(ctx.t("greeting")).toBe("Hallo");
+});
+
 Deno.test("supports plurals and interpolation", async () => {
     const ctx = await applyMiddleware(makePlugin(), makeContext());
     expect(ctx.t("items", { count: 1 })).toBe("1 item");

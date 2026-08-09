@@ -40,16 +40,53 @@ Deno.test("useLocale rebinds ctx.t immediately", async () => {
         () => Promise.resolve(),
     );
     expect(ctx.t("greeting")).toBe("Hallo");
-    ctx.i18n.useLocale("en");
+    await ctx.i18n.useLocale("en");
     expect(ctx.i18n.getLocale()).toBe("en");
     expect(ctx.t("greeting")).toBe("Hello");
 });
 
 Deno.test("useLocale rejects empty locales", async () => {
     const ctx = await applyMiddleware(makePlugin(), makeContext());
-    expect(() => ctx.i18n.useLocale("")).toThrow(
+    await expect(ctx.i18n.useLocale("")).rejects.toThrow(
         "Cannot use an empty locale",
     );
+});
+
+Deno.test("loads negotiated languages from a lazy backend", async () => {
+    const requested: string[] = [];
+    const data: Record<string, Record<string, object>> = {
+        en: { translation: { greeting: "Hello" } },
+        de: { translation: { greeting: "Hallo" } },
+    };
+    const backend = {
+        type: "backend" as const,
+        init(): void {},
+        read(
+            language: string,
+            namespace: string,
+            callback: (error: unknown, resources?: object) => void,
+        ): void {
+            requested.push(language);
+            callback(null, data[language]?.[namespace] ?? {});
+        },
+    };
+    const instance = i18next.createInstance().use(backend as never);
+    const plugin = new I18next({
+        i18next: instance,
+        initOptions: { fallbackLng: "en" },
+    });
+
+    // Initialization only loads the fallback language, so translating into
+    // German requires the plugin to request it from the backend on demand.
+    const ctx = await applyMiddleware(
+        plugin,
+        makeContext(messageUpdate("hi", "de")),
+    );
+    expect(requested).toContain("de");
+    expect(ctx.t("greeting")).toBe("Hallo");
+
+    await ctx.i18n.useLocale("en");
+    expect(ctx.t("greeting")).toBe("Hello");
 });
 
 Deno.test("supports plurals and interpolation", async () => {

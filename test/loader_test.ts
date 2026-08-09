@@ -39,6 +39,14 @@ Deno.test("throws when the directory contains no locales", async () => {
     );
 });
 
+Deno.test("does not treat directories without JSON files as locales", async () => {
+    // "no-json" contains only en/notes.txt, which must not register an
+    // empty "en" locale that would silently translate nothing.
+    await expect(loadLocales(fixture("no-json"))).rejects.toThrow(
+        "No locales found",
+    );
+});
+
 Deno.test("throws a descriptive error for invalid JSON", async () => {
     await expect(loadLocales(fixture("invalid"))).rejects.toThrow(
         "Invalid JSON in locale file",

@@ -89,7 +89,7 @@ The resolved locale only affects the current update. The plugin never calls `cha
 
 ```ts
 bot.command("language", async (ctx) => {
-    ctx.i18n.useLocale("de"); // this update only
+    await ctx.i18n.useLocale("de"); // this update only
     await ctx.i18n.setLocale("de"); // + persist via the locale store
     await ctx.i18n.renegotiate(); // re-run the negotiator
     ctx.i18n.getLocale(); // the locale currently in use
@@ -154,7 +154,7 @@ locales/
 └── pt-BR.json        ← or a flat file per locale (namespace "translation")
 ```
 
-For lazy loading, caching, or remote sources, use any i18next backend plugin with a self-managed instance instead.
+For lazy loading, caching, or remote sources, use any i18next backend plugin with a self-managed instance instead. The plugin detects attached backends and loads the resources of each negotiated locale on demand (via `loadLanguages`) before binding `ctx.t`, so lazily loaded locales work out of the box.
 
 ## Translating outside of handlers
 

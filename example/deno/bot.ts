@@ -33,7 +33,7 @@ bot.command("language", async (ctx) => {
     }
     // With a configured `localeStore`, use `ctx.i18n.setLocale(locale)`
     // instead to persist the choice across updates.
-    ctx.i18n.useLocale(locale);
+    await ctx.i18n.useLocale(locale);
     await ctx.send(ctx.t("language.changed"));
 });
 

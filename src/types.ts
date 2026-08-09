@@ -69,9 +69,13 @@ export interface I18nextControls {
      * Uses the given locale for all subsequent `ctx.t` calls of this update.
      * This does not persist the locale—use {@link setLocale} for that.
      *
+     * If a lazy-loading backend is attached to the i18next instance, the
+     * locale's resources are loaded from it before `ctx.t` is rebound, so
+     * always await this call.
+     *
      * @param locale The locale to use for the rest of this update.
      */
-    useLocale(locale: string): void;
+    useLocale(locale: string): Promise<void>;
     /**
      * Uses the given locale for all subsequent `ctx.t` calls of this update,
      * and persists it via the configured locale store (if any).

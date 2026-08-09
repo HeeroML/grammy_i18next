@@ -125,7 +125,9 @@ export class I18next<
      * update. Useful outside of middleware, e.g. for broadcasts.
      *
      * The i18next instance must be initialized—await {@link ready} first when
-     * calling this outside of middleware.
+     * calling this outside of middleware. With a lazy-loading backend, only
+     * locales that are already loaded can be translated here; load others
+     * beforehand via `instance.loadLanguages(locale)`.
      *
      * @param locale The locale to translate into.
      * @param key The message key to translate.
@@ -204,6 +206,20 @@ export class I18next<
     }
 
     /**
+     * Makes sure the resources of a locale are available before a translator
+     * is bound to it. This only does work when a lazy-loading backend is
+     * attached to the instance—initialization typically loads only the
+     * initial and fallback languages, so other negotiated locales must be
+     * requested from the backend explicitly. Without a backend (resources
+     * passed upfront), this is a no-op.
+     */
+    async #ensureLanguageLoaded(locale: string): Promise<void> {
+        const connector = this.instance.services?.backendConnector;
+        if (connector?.backend == null) return;
+        await this.instance.loadLanguages(locale);
+    }
+
+    /**
      * The middleware of the plugin. Install it early, before any middleware
      * that uses `ctx.t` or `ctx.i18n`:
      *
@@ -227,13 +243,15 @@ export class I18next<
             let locale = this.defaultLocale;
             let translate = this.instance.getFixedT(locale, ns);
 
-            const useLocale = (newLocale: string): void => {
+            const useLocale = async (newLocale: string): Promise<void> => {
                 if (typeof newLocale !== "string" || newLocale.length === 0) {
                     throw new Error(
                         "Cannot use an empty locale for translations.",
                     );
                 }
-                locale = this.#normalizeLocale(newLocale);
+                const normalized = this.#normalizeLocale(newLocale);
+                await this.#ensureLanguageLoaded(normalized);
+                locale = normalized;
                 translate = this.instance.getFixedT(locale, ns);
                 debug(`Using locale '${locale}'`);
             };
@@ -244,11 +262,11 @@ export class I18next<
                         ? `Negotiation failed, using default locale '${this.defaultLocale}'`
                         : `Negotiated locale '${negotiated}'`,
                 );
-                useLocale(negotiated ?? this.defaultLocale);
+                await useLocale(negotiated ?? this.defaultLocale);
                 return locale;
             };
             const setLocale = async (newLocale: string): Promise<void> => {
-                useLocale(newLocale);
+                await useLocale(newLocale);
                 await store?.write(ctx, locale);
             };
 
@@ -275,7 +293,7 @@ export class I18next<
             const stored = await store?.read(ctx);
             if (typeof stored === "string" && stored.length > 0) {
                 debug(`Restored locale '${stored}' from the locale store`);
-                useLocale(stored);
+                await useLocale(stored);
             } else {
                 await renegotiate();
             }

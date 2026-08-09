@@ -38,10 +38,16 @@ export async function loadLocales(directory: string): Promise<Resource> {
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
         if (entry.isDirectory()) {
-            resource[entry.name] = await loadNamespaces(
+            const namespaces = await loadNamespaces(
                 join(directory, entry.name),
                 "",
             );
+            // A directory without any JSON files is not a locale. Skipping it
+            // (instead of registering an empty locale) keeps the "no locales
+            // found" error below meaningful.
+            if (Object.keys(namespaces).length > 0) {
+                resource[entry.name] = namespaces;
+            }
         } else if (entry.isFile() && extname(entry.name) === JSON_EXTENSION) {
             const locale = entry.name.slice(0, -JSON_EXTENSION.length);
             resource[locale] = {

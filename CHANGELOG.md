@@ -2,7 +2,7 @@
 
 Notable changes to `@heeroml/grammy-i18next`. The package major tracks grammY 2; while grammY 2 is in beta, only prereleases are published.
 
-## 2.0.0-beta.1 (unreleased)
+## 2.0.0-beta.1 - 2026-09-01
 
 A rewrite around a grammY-version-independent core, so that one implementation can serve both grammY majors. Entries that break code written against 2.0.0-beta.0 are marked **breaking**.
 

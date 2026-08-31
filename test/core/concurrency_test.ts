@@ -1,15 +1,10 @@
 import { expect } from "@std/expect";
-import {
-    applyMiddleware,
-    makeContext,
-    makePlugin,
-    messageUpdate,
-} from "./helpers.ts";
+import { applyMiddleware, makeContext, makePlugin } from "./helpers.ts";
 
 Deno.test("locales do not bleed across concurrently processed updates", async () => {
     const plugin = makePlugin();
-    const german = makeContext(messageUpdate("hi", "de"));
-    const english = makeContext(messageUpdate("hi"));
+    const german = makeContext("hi", "de");
+    const english = makeContext("hi");
 
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
@@ -33,8 +28,6 @@ Deno.test("locales do not bleed across concurrently processed updates", async ()
     // The English update finished first, but the German update still
     // translates into German afterwards.
     expect(translations).toEqual(["Hello", "Hallo"]);
-    expect(german.i18n.getLocale()).toBe("de");
-    expect(english.i18n.getLocale()).toBe("en");
 });
 
 Deno.test("many interleaved updates each keep their own locale", async () => {
@@ -45,11 +38,12 @@ Deno.test("many interleaved updates each keep their own locale", async () => {
     }));
 
     await Promise.all(updates.map(async ({ locale, expected }) => {
-        const ctx = makeContext(messageUpdate("hi", locale));
+        const ctx = makeContext("hi", locale);
         await applyMiddleware(plugin, ctx, async () => {
             // Yield to the event loop a few times so handlers interleave.
             for (let i = 0; i < 3; i++) await Promise.resolve();
             expect(ctx.t("greeting")).toBe(expected);
+            expect(ctx.i18n.getLocale()).toBe(locale);
         });
     }));
 });

@@ -1,20 +1,29 @@
+/**
+ * grammY 2 on Node.js.
+ *
+ * ```sh
+ * cd example/node
+ * npm install   # resolves the JSR packages through https://npm.jsr.io
+ * BOT_TOKEN=... npm start
+ * ```
+ *
+ * Node 24 runs the TypeScript source directly via type stripping; on Node 22
+ * add `--experimental-strip-types`.
+ */
 import { Bot, type Context } from "@grammyjs/grammy";
-import {
-    I18next,
-    type I18nextFlavor,
-    loadLocales,
-} from "@heeroml/grammy-i18next";
+import { I18next, type I18nextFlavor } from "@heeroml/grammy-i18next";
+import { loadLocales } from "@heeroml/grammy-i18next/loader";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 type MyContext = I18nextFlavor<Context>;
 
-const i18n = new I18next({
+const i18n = new I18next<MyContext>({
     initOptions: {
         fallbackLng: "en",
         defaultNS: "main",
         resources: await loadLocales(
-            // The example shares its locales with the Deno example.
+            // This example shares its locales with the Deno one.
             fileURLToPath(new URL("../deno/locales", import.meta.url)),
         ),
     },

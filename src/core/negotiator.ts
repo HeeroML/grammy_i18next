@@ -1,4 +1,4 @@
-import type { Context } from "@grammyjs/grammy";
+import type { ContextLike } from "./types.ts";
 
 /**
  * The locale negotiator used when no custom negotiator is configured. It reads
@@ -10,6 +10,6 @@ import type { Context } from "@grammyjs/grammy";
  * @param ctx The context object of the current update.
  * @returns The user's language code, or `undefined` if unknown.
  */
-export function defaultLocaleNegotiator(ctx: Context): string | undefined {
+export function defaultLocaleNegotiator(ctx: ContextLike): string | undefined {
     return ctx.from?.language_code;
 }

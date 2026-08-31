@@ -1,13 +1,28 @@
+/**
+ * grammY 2 on Deno.
+ *
+ * Run it with the plugin's sources straight from this repository:
+ *
+ * ```sh
+ * BOT_TOKEN=... deno run --allow-net --allow-read --allow-env example/deno/bot.ts
+ * ```
+ *
+ * In your own bot, replace the relative imports with
+ * `@heeroml/grammy-i18next` and `@heeroml/grammy-i18next/loader`.
+ */
 import { Bot, type Context } from "@grammyjs/grammy";
 import { fileURLToPath } from "node:url";
-import { I18next, type I18nextFlavor, loadLocales } from "../../src/mod.ts";
+import { I18next, type I18nextFlavor } from "../../src/mod.ts";
+import { loadLocales } from "../../src/loader/mod.ts";
 
 type MyContext = I18nextFlavor<Context>;
 
-const i18n = new I18next({
+const i18n = new I18next<MyContext>({
     initOptions: {
         fallbackLng: "en",
         defaultNS: "main",
+        // `loadLocales` is the only part of the package that touches the file
+        // system, which is why it lives in its own entrypoint.
         resources: await loadLocales(
             fileURLToPath(new URL("./locales", import.meta.url)),
         ),
@@ -16,6 +31,7 @@ const i18n = new I18next({
 
 const bot = new Bot<MyContext>(Deno.env.get("BOT_TOKEN") ?? "");
 
+// Install the plugin before anything that uses `ctx.t` or `ctx.i18n`.
 bot.use(i18n);
 
 bot.command("start", async (ctx) => {

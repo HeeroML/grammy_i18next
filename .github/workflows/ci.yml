@@ -1,0 +1,79 @@
+name: CI
+
+on:
+    push:
+        branches: [main, master]
+        tags: ["v*"]
+    pull_request:
+    workflow_dispatch:
+
+# Three verification jobs, one per runtime the package claims to support.
+# `deno` is the primary one (it is the publishing toolchain); `node` and `bun`
+# run the same ./smoke suite from the dev-only package.json, which is how the
+# npm-compat resolution path (@jsr:registry) gets exercised.
+jobs:
+    deno:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
+            - uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.x
+            # fmt, lint, check, ./test, ./smoke and the module-graph
+            # assertions (scripts/assert-graphs.sh -- needs only Deno, no jq).
+            - name: Format, lint, type-check, test
+              run: deno task ok
+            - name: Validate JSR publishing
+              run: deno publish --dry-run
+
+    node:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                # 24.x = Active LTS (the supported floor), 26.x = Current.
+                node-version: [24.x, 26.x]
+        steps:
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
+              with:
+                  node-version: ${{ matrix.node-version }}
+            # The dev-only package.json aliases the JSR packages through the
+            # npm compatibility registry configured in ./.npmrc.
+            - name: Install the smoke harness
+              run: npm ci
+            # Node runs the TypeScript sources directly via type stripping.
+            - name: Smoke tests
+              run: npm run test:node
+            # esbuild resolves inside npm packages, which `deno info` cannot.
+            - name: Browser/worker bundle
+              run: npm run test:browser
+
+    bun:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v5
+            - uses: oven-sh/setup-bun@v2
+            # Bun has no lockfile of its own here: it migrates the committed
+            # package-lock.json to bun.lock in place and installs from it.
+            - name: Install the smoke harness
+              run: bun install --frozen-lockfile
+            - name: Smoke tests
+              run: bun test smoke
+
+    # Publishes to JSR via OIDC (no tokens needed). Requires the package on
+    # jsr.io to be linked to this GitHub repository. Runs when a version tag
+    # is pushed, or manually via workflow_dispatch.
+    publish:
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        needs: [deno, node, bun]
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - uses: actions/checkout@v5
+            - uses: denoland/setup-deno@v2
+              with:
+                  deno-version: v2.x
+            - name: Publish to JSR
+              run: deno publish

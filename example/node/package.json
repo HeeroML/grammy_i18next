@@ -1,0 +1,14 @@
+{
+    "name": "grammy-i18next-example",
+    "private": true,
+    "type": "module",
+    "//": "Install with `npx jsr add @heeroml/grammy-i18next` (which also writes the .npmrc for the JSR registry). With Bun, prereleases need the exact version: `bun add @heeroml/grammy-i18next@npm:@jsr/heeroml__grammy-i18next@2.0.0-beta.1`.",
+    "dependencies": {
+        "@grammyjs/grammy": "npm:@jsr/grammyjs__grammy@2.0.0-beta.8",
+        "@heeroml/grammy-i18next": "npm:@jsr/heeroml__grammy-i18next@2.0.0-beta.1",
+        "i18next": "^26.4.0"
+    },
+    "scripts": {
+        "start": "node bot.ts"
+    }
+}

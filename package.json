@@ -1,0 +1,19 @@
+{
+    "name": "grammy-i18next-dev",
+    "private": true,
+    "type": "module",
+    "description": "Dev-only harness that runs the ./smoke tests under Node and Bun. Not published; the published artifact is the JSR package @heeroml/grammy-i18next (see deno.jsonc).",
+    "scripts": {
+        "test:node": "node --test 'smoke/**/*.test.ts'",
+        "test:bun": "bun test smoke",
+        "test:browser": "node scripts/browser-bundle.mjs"
+    },
+    "devDependencies": {
+        "@fluent/bundle": "^0.19.1",
+        "@grammyjs/debug": "npm:@jsr/grammyjs__debug@^0.3.1",
+        "@grammyjs/grammy": "npm:@jsr/grammyjs__grammy@2.0.0-beta.8",
+        "esbuild": "^0.28.2",
+        "grammy": "^1.46.0",
+        "i18next": "^26.4.0"
+    }
+}

@@ -1,0 +1,8 @@
+{
+    "greeting": "Hallo, {{name}}!",
+    "language": {
+        "usage": "Verwendung: /language <Sprache>, zum Beispiel /language en",
+        "changed": "Sprache geändert!"
+    },
+    "echo": "Du hast gesagt: {{text}}"
+}

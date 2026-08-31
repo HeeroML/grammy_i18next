@@ -1,0 +1,80 @@
+{
+    "name": "@heeroml/grammy-i18next",
+    "version": "2.0.0-beta.1",
+    "license": "MIT",
+    "lock": false,
+    // The repository also carries a dev-only package.json for the Node/Bun
+    // smoke harness (see ./smoke). Deno must not manage that node_modules.
+    "nodeModulesDir": "none",
+    // This project intentionally tracks brand-new grammY 2.0 betas, which are
+    // often younger than the default 24h dependency age gate. The exclusion
+    // must cover the whole scope because the gate is not transitive
+    // (@grammyjs/grammy depends on @grammyjs/debug).
+    "minimumDependencyAge": {
+        "age": "P1D",
+        "exclude": ["jsr:@grammyjs/*"]
+    },
+    "exports": {
+        ".": "./src/mod.ts",
+        "./v2": "./src/v2/mod.ts",
+        "./v1": "./src/v1/mod.ts",
+        "./fluent": "./src/fluent/mod.ts",
+        "./loader": "./src/loader/mod.ts"
+    },
+    "imports": {
+        "@fluent/bundle": "npm:@fluent/bundle@^0.19.1",
+        "@grammyjs/debug": "jsr:@grammyjs/debug@^0.3.1",
+        "@grammyjs/grammy": "jsr:@grammyjs/grammy@^2.0.0-beta.0",
+        "grammy": "npm:grammy@^1.10.0",
+        "i18next": "npm:i18next@^26.4.0",
+        // Test-only (excluded from publishing, hence not a package dependency).
+        "@grammyjs/i18n": "npm:@grammyjs/i18n@1.1.2",
+        "@std/expect": "jsr:@std/expect@^1.0.20",
+        "@std/path": "jsr:@std/path@^1.1.0"
+    },
+    "compilerOptions": {
+        // Node and Bun run the TypeScript sources with type stripping only.
+        "erasableSyntaxOnly": true
+    },
+    "tasks": {
+        // `./test/types_custom/` augments i18next's `CustomTypeOptions`, which
+        // is program-wide, so it is checked as its own program and every other
+        // directory is listed explicitly rather than as `./test/`.
+        "check": "deno check ./src/ ./test/core/ ./test/fluent/ ./test/loader/ ./test/shared/ ./test/types/ ./test/v1/ ./test/v2/ ./smoke/ ./example/ && deno check ./test/types_custom/",
+        // -E: the grammY 1 integration test pulls in npm `debug`, which
+        // enumerates `process.env` at module load.
+        "test": "deno test --parallel -R -E ./test/",
+        // -E: the grammY 1 smoke test pulls in npm `debug`, which enumerates
+        // `process.env` at module load. -R: the loader smoke test reads
+        // ./test/fixtures.
+        "test:smoke": "deno test -R -E ./smoke/",
+        "graph": "./scripts/assert-graphs.sh",
+        "ok": "deno fmt --check && deno lint && deno task check && deno task test && deno task test:smoke && deno task graph",
+        "fix": "deno fmt && deno lint --fix"
+    },
+    "fmt": {
+        "indentWidth": 4,
+        "proseWrap": "preserve",
+        "exclude": [
+            "./test/fixtures/invalid/",
+            "./node_modules/",
+            "./package-lock.json"
+        ]
+    },
+    "lint": {
+        "exclude": ["./node_modules/"]
+    },
+    "publish": {
+        "exclude": [
+            "./test/",
+            "./smoke/",
+            "./example/",
+            "./docs/",
+            "./scripts/",
+            "./.github/",
+            "./package.json",
+            "./package-lock.json",
+            "./.npmrc"
+        ]
+    }
+}

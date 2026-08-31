@@ -1,0 +1,2 @@
+hello = Hello
+greeting = Hello, { $name }!

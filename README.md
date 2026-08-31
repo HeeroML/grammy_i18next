@@ -454,6 +454,9 @@ bot.filter(
 
 ### API differences
 
+<details>
+<summary>Surface-by-surface comparison with <code>@grammyjs/i18n</code> 1.1.2</summary>
+
 | Surface                        | `@grammyjs/i18n` 1.1.2                                                 | this plugin                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Flavor                         | additive `I18nFlavor` (`Context & I18nFlavor`)                         | transformative `I18nextFlavor<C>` (alias `I18nFlavor<C>`)                        |
@@ -473,11 +476,14 @@ bot.filter(
 | `fluentOptions.warningHandler` | Fluent warning callback                                                | `onError` on `createFluentI18next` / `createFluentFormat`                        |
 | `useIsolating`                 | Fluent default (`true`)                                                | same default                                                                     |
 
+</details>
+
 ### What the differential tests guarantee
 
 Fluent mode is tested against the real `@grammyjs/i18n@1.1.2` `Fluent` class, loaded in-process over the same `.ftl` fixtures, in compat mode. Both engines are compared string by string.
 
-Byte-identical output:
+<details>
+<summary>Byte-identical output (12 feature groups)</summary>
 
 | Feature                                                           | Example                                                                              |
 | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -493,6 +499,8 @@ Byte-identical output:
 | Region fallback and default-locale fallback                       | `de-AT → de`, `fr → en`                                                              |
 | Missing message, missing attribute, value-less message            | `{nope}`, `{login.nope}`, `""`                                                       |
 | Duplicate ids inside one source                                   | last definition wins                                                                 |
+
+</details>
 
 Intentional differences:
 

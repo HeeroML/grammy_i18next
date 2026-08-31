@@ -10,6 +10,14 @@ There is one implementation and one entrypoint per grammY major. All behaviour l
 
 The root export is the grammY 2 entrypoint (`.` and `./v2` are literally the same module). I kept it that way because the only published version of this package targeted grammY 2, and the package major tracks grammY 2. For grammY 1.x, import from `@heeroml/grammy-i18next/v1`. The plugin, its options, and its behaviour are identical there.
 
+## Documentation
+
+This README covers the core usage and the migration in short. The rest lives in three documents:
+
+- [Advanced usage](https://github.com/HeeroML/grammy_i18next/blob/main/docs/advanced.md): backends and lazy loading, namespaces, loading files from disk, entrypoints and runtimes, typed keys, what the middleware does, concurrency, debug logging, HTML escaping.
+- [Fluent compatibility mode](https://github.com/HeeroML/grammy_i18next/blob/main/docs/fluent.md): the full `/fluent` documentation, its options, and how it works.
+- [Migrating from `@grammyjs/i18n`](https://github.com/HeeroML/grammy_i18next/blob/main/docs/migration.md): the full migration guide, the API differences, and the differential test guarantees.
+
 ## Installation
 
 The package is published on [JSR](https://jsr.io/@heeroml/grammy-i18next).
@@ -96,24 +104,13 @@ locales/
     └── translation.json    → { "greeting": "Hallo, {{name}}!" }
 ```
 
-Runnable examples: [`example/deno`](./example/deno/bot.ts) (grammY 2, Deno), [`example/node`](./example/node/bot.ts) (grammY 2, Node.js), [`example/grammy-v1`](./example/grammy-v1/bot.ts) (grammY 1 with sessions), [`example/fluent-migration`](./example/fluent-migration/bot.ts) (Fluent compatibility mode).
+Runnable examples: [`example/deno`](https://github.com/HeeroML/grammy_i18next/blob/main/example/deno/bot.ts) (grammY 2, Deno), [`example/node`](https://github.com/HeeroML/grammy_i18next/blob/main/example/node/bot.ts) (grammY 2, Node.js), [`example/grammy-v1`](https://github.com/HeeroML/grammy_i18next/blob/main/example/grammy-v1/bot.ts) (grammY 1 with sessions), [`example/fluent-migration`](https://github.com/HeeroML/grammy_i18next/blob/main/example/fluent-migration/bot.ts) (Fluent compatibility mode).
 
 ## Why i18next
 
 Telegram-specific i18n libraries give your bot its own message format, its own loader, and its own locale storage. i18next is the format the rest of your product most likely already speaks: web frontends, React Native apps, backend services, e-mail templates. Using it in the bot means one set of translation files, one translation memory in your TMS, one set of formatters, and one place where a translator works.
 
-The second half of that is the locale itself. The locale of a user is a property of the user, not of the channel they happen to be talking through:
-
-```
-User DB / profile
-       |
-   locale = de
-    /       \
-Web app    grammY bot
- i18next     i18next
-```
-
-The plugin never owns that value. `localeStore` is a two-method interface over whatever storage already holds it.
+The second half of that is the locale itself. The locale of a user is a property of the user, not of the channel they happen to be talking through. The plugin never owns that value. `localeStore` is a two-method interface over whatever storage already holds it.
 
 ```ts
 const i18n = new I18next<MyContext>({
@@ -125,7 +122,7 @@ const i18n = new I18next<MyContext>({
 });
 ```
 
-The same row that the web app reads for its own i18next instance now drives the bot. A user who switches the language on the website is answered in that language by the bot, and `ctx.i18n.setLocale("de")` in a handler changes the website too, without a synchronization job, because there is only one value.
+The same row that the web app reads for its own i18next instance now drives the bot. A user who switches the language on the website is answered in that language by the bot, and `ctx.i18n.setLocale("de")` in a handler changes the website too, without a synchronization job, because there is only one value. The same picture as a diagram is in [the advanced documentation](https://github.com/HeeroML/grammy_i18next/blob/main/docs/advanced.md#the-locale-lives-with-the-user).
 
 ## Providing translations
 
@@ -157,73 +154,7 @@ The instance does not have to be initialized. If it is not, the plugin initializ
 
 At least one of `i18next` and `initOptions` must be given; the constructor throws otherwise.
 
-### Backends and lazy loading
-
-Any [i18next backend](https://www.i18next.com/overview/plugins-and-utils#backends) works. The plugin detects an attached backend and then:
-
-- loads the resources of a negotiated locale on demand (via `loadLanguages`) before binding `ctx.t`, deduplicated per locale, so lazily loaded locales work without further setup;
-- loads the namespaces bound via the `ns` option once when the plugin becomes ready, so that every locale negotiated later fetches them too;
-- preloads `supportedLocales` when the plugin becomes ready.
-
-That last point is the price of all-locale `hears` matching. The predicate handed to `bot.filter` is synchronous and cannot fetch translations on demand, so the locales it should match must be in memory before the first update arrives. Without a backend nothing is preloaded, because everything is already there.
-
-`await i18n.ready()` gives you that moment explicitly; the middleware awaits it on the first update anyway.
-
-Start-up is strict, per-update loading is not. Initialization errors reject `ready()` and therefore every update, and they keep rejecting instead of hanging or silently retrying. That covers backend errors while loading the fallback language, the plugin-bound `ns` namespaces, or `supportedLocales`. A backend failure while loading a locale for a single update is **not fatal**: the locale is applied anyway and translations fall back along i18next's language hierarchy (`de-AT` → `de` → `fallbackLng`), which mirrors i18next's own `changeLanguage` contract. One unreachable file does not take the bot down for every user of that locale. Such failures are observable through i18next's native `failedLoading` event on `i18n.instance` and in the `grammy:i18next` debug log.
-
-i18next does not ask the backend again for a language/namespace pair that failed after its own internal retries. Call `i18n.instance.reloadResources()` to force a re-read.
-
-### Namespaces
-
-`ns` binds one or more namespaces into `ctx.t`, exactly like `getFixedT(lng, ns)`:
-
-```ts
-const i18n = new I18next<MyContext, "menu">({
-    initOptions: { fallbackLng: "en", resources },
-    ns: "menu",
-});
-```
-
-Without the option, the default namespace of the instance is used, and single calls can still select another one: `ctx.t("key", { ns: "errors" })`.
-
-### Loading translation files from disk
-
-The `/loader` entrypoint reads translation trees into memory without a file-system backend plugin.
-
-`loadLocales(directory)` returns an i18next `Resource` for `initOptions.resources`. Two layouts are supported and can be mixed per locale:
-
-```txt
-locales/
-├── en/               ← directory per locale
-│   ├── main.json     ← one file per namespace ("main")
-│   └── errors/
-│       └── api.json  ← nested directories join with "/" ("errors/api")
-└── pt-BR.json        ← or a flat file per locale (namespace "translation")
-```
-
-`loadFluentLocales(directory)` does the same for Fluent sources and returns `Record<locale, ftlSource>` for `createFluentI18next({ resources })`:
-
-```txt
-locales/
-├── en.ftl            ← flat file per locale
-└── de/               ← or a directory per locale, whose .ftl files are
-    ├── main.ftl      ←   concatenated recursively, in sorted path order
-    └── extra/
-        └── more.ftl
-```
-
-That is the layout convention of `@grammyjs/i18n`, so an existing locales directory keeps working unchanged.
-
-### Entrypoints and runtimes
-
-| Entrypoint   | Contents                           | Node built-ins         |
-| ------------ | ---------------------------------- | ---------------------- |
-| `.` / `./v2` | plugin bound to grammY 2 types     | no                     |
-| `./v1`       | plugin bound to grammY 1 types     | no                     |
-| `./fluent`   | Project Fluent format module       | no                     |
-| `./loader`   | `loadLocales`, `loadFluentLocales` | `node:fs`, `node:path` |
-
-`/loader` is the only entrypoint that touches Node built-ins, so it needs Node.js, Deno, or Bun. The other four bundle cleanly for a browser or worker target. CI verifies this with esbuild (`platform: "browser"`, conditions `worker`/`browser`) and fails if a `node:` builtin or the loader shows up in the bundle inputs. CI also asserts that `./v1` has no runtime edge to grammY 2 (and vice versa) and that the non-Fluent entrypoints never pull in `@fluent/bundle`. That is a bundling guarantee, not a claim that the plugin has been deployed to any specific edge platform.
+The advanced documentation covers the rest of the translation setup: [backends and lazy loading](https://github.com/HeeroML/grammy_i18next/blob/main/docs/advanced.md#backends-and-lazy-loading) (including what is preloaded and which failures are fatal), [namespaces](https://github.com/HeeroML/grammy_i18next/blob/main/docs/advanced.md#namespaces) via the `ns` option, [loading translation files from disk](https://github.com/HeeroML/grammy_i18next/blob/main/docs/advanced.md#loading-translation-files-from-disk) with `/loader`, and the [entrypoints and runtimes](https://github.com/HeeroML/grammy_i18next/blob/main/docs/advanced.md#entrypoints-and-runtimes) table.
 
 ## Locale resolution
 
@@ -292,19 +223,6 @@ The session middleware must run before the plugin. Otherwise `ctx.session` is no
 
 grammY 2 has no session plugin yet, neither in core nor on JSR. Until it does, use any other `LocaleStore` (a database, a KV store, a cache). `sessionLocaleStore()` itself is not grammY-1-specific. It only requires a `ctx.session` object, so it also works with a session middleware of your own that runs before the plugin.
 
-## What the middleware does
-
-- It works on the same context object. Nothing is cloned or replaced. `ctx.t`, `ctx.translate`, and `ctx.i18n` are installed with `Object.defineProperty` as non-enumerable and configurable, so they do not appear in `Object.keys(ctx)`, spreads, or `JSON.stringify(ctx)`.
-- Own descriptors that existed before are snapshotted and restored when the plugin's scope ends; properties that did not exist before are deleted again. Nested or duplicate plugin instances therefore behave like ordinary onion middleware: the inner instance owns its downstream scope, the outer one is intact afterwards.
-- `next()` is called exactly once and awaited.
-- Errors from the locale store, the locale negotiator, and downstream middleware propagate and reject the middleware; initialization errors reject every update. The one deliberate exception is a per-update backend load failure, which is logged and does not stop the update (see [Backends and lazy loading](#backends-and-lazy-loading)).
-- It composes with session middleware, nested `Composer`s, and custom context flavors; the integration suite runs all of that through a real `Bot` on both grammY majors.
-- `@grammyjs/conversations` never clones or serializes the context. It rebuilds the context from `{ update, api, me }` and re-runs the plugins you declared. Install this plugin as a conversation plugin the same way you install it on the bot. (This repository has no test for conversations; the statement describes how conversations rebuild contexts, not a verified integration.)
-
-## Concurrency
-
-The plugin never calls `changeLanguage()`. Every update gets its own translation function via `getFixedT(locale, ns)`, so concurrently or interleaved processed updates cannot leak locales into each other, and the global language of the instance never moves. Both majors are tested with interleaved updates in different locales.
-
 ## Matching translated text (`hears`)
 
 Localized keyboards send back plain localized text. `i18n.hears` builds a predicate for `bot.filter` that matches a key's translations instead of hard-coded strings:
@@ -328,28 +246,6 @@ i18n.hears(key, {
 
 Matching delegates to the installed grammY major's own `ctx.hasText`, so message texts and media captions both match, and the major's own match bookkeeping applies: `ctx.match` on grammY 1, `ctx.payload` on grammY 2. The predicate narrows the context type exactly like `bot.hears` does.
 
-## Typed translation keys
-
-Because `ctx.t` is a real i18next `TFunction`, i18next's standard [TypeScript setup](https://www.i18next.com/overview/typescript) gives fully typed keys and interpolation variables:
-
-```ts
-// i18next.d.ts
-import type enMain from "./locales/en/main.json";
-
-declare module "i18next" {
-    interface CustomTypeOptions {
-        defaultNS: "main";
-        resources: { main: typeof enMain };
-    }
-}
-```
-
-Now `ctx.t("greetin")` is a compile-time error, and `ctx.t("greeting", { name: ... })` knows its variables. No code generation, no plugin-specific tooling.
-
-If you bind a namespace with the `ns` option, pass it as the second type parameter (`I18next<MyContext, "menu">`) so that `ctx.t` is typed for that namespace.
-
-In Fluent mode, add `parseInterpolation: false` (i18next 26.2+) to `CustomTypeOptions`. It disables the type-level `{{var}}` extractor, which does not understand FTL placeables.
-
 ## Fluent compatibility mode
 
 The `/fluent` entrypoint teaches i18next to format [Project Fluent](https://projectfluent.org) messages. It exists for migration and interop. A bot with a large `.ftl` corpus can move to this plugin without rewriting its translations first, and a project can serve FTL and JSON from two instances while it migrates. Native i18next JSON remains the primary engine of this package.
@@ -372,25 +268,12 @@ const i18n = new I18next<MyContext>({
 
 For a self-managed instance, register the module yourself with `createFluentFormat(options)` and `i18next.use(...)`. That path also works with a backend. FTL text must not travel through i18next's resource store as a raw string (i18next would spread it into a per-character object), so wrap it with `fluentSource(source)`, i.e. deliver `{ ftl: "…" }` per language and namespace.
 
-### Options
-
-| Option           | Default           | Meaning                                                                                                                                                                                                                                                    |
-| ---------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bundleOptions`  | `{}`              | Passed to `new FluentBundle()`, either as one bag or as a factory called once per locale. `functions` adds builtins; `useIsolating` (default `true`) wraps placeables in FSI/PDI marks (`U+2068`/`U+2069`).                                                |
-| `allowOverrides` | value of `compat` | Whether a later resource may override an already defined message or term. Fluent's own default is `false` (first wins, duplicate reported); `@grammyjs/i18n` behaved like `true`.                                                                          |
-| `onError`        | `console.warn`    | Called for every problem, with `{ kind: "format" \| "resource", locale, namespace, key?, errors, message }`. It never throws by default, and it is never silent by default.                                                                                |
-| `compat`         | `false`           | Reproduces `@grammyjs/i18n` output conventions: a missing message or attribute renders as `{key}` instead of i18next's "return the key", a message with attributes but no value renders as `""` for the bare key, and `allowOverrides` defaults to `true`. |
-
-The FSI/PDI marks are invisible in Telegram clients but not in string comparisons: `t("greeting", { name: "World" })` is `"Hello, ⁨World⁩!"` by default. Turn them off with `bundleOptions: { useIsolating: false }` if you compare rendered strings (e.g. in your own tests).
-
-### How it works
-
-Raw `.ftl` text → `FluentResource` → `FluentBundle` → `formatPattern`. i18next's resource store keeps the raw source as an opaque value (so `hasResourceBundle`, backend deduplication, and `loadLanguages` keep working), and one bundle per `locale|namespace` is compiled from it exactly once and cached in a sidecar map. `@fluent/bundle` is only loaded if you import `/fluent`; the other entrypoints never reach it.
-
 Two consequences worth knowing:
 
 - Message and term references are bundle-local. With one namespace there is one bundle per locale and everything can reference everything. If you split namespaces, a message in one namespace cannot reference a term in another.
 - Fluent handles syntax errors silently. `new FluentResource(source)` never throws; it drops the messages it cannot parse. A typo in an `.ftl` file therefore surfaces as a missing message at runtime, not as a load failure. If you need that to be an error, validate your `.ftl` files in CI with [`@fluent/syntax`](https://www.npmjs.com/package/@fluent/syntax).
+
+The [`options` table](https://github.com/HeeroML/grammy_i18next/blob/main/docs/fluent.md#options) (`bundleOptions`, `allowOverrides`, `onError`, `compat`) and [how the format module works](https://github.com/HeeroML/grammy_i18next/blob/main/docs/fluent.md#how-it-works) are in the [Fluent documentation](https://github.com/HeeroML/grammy_i18next/blob/main/docs/fluent.md).
 
 ## Migrating from `@grammyjs/i18n`
 
@@ -452,66 +335,9 @@ bot.filter(
 
 `I18n` and `I18nFlavor` are aliases of `I18next` and `I18nextFlavor`. The flavor is transformative: `I18nFlavor<Context>` instead of `Context & I18nFlavor`. `hears` moves from a standalone export to a method on the plugin instance, because it needs to know the instance's locales; `{ mode: "current-locale" }` reproduces the old behaviour.
 
-### API differences
-
-<details>
-<summary>Surface-by-surface comparison with <code>@grammyjs/i18n</code> 1.1.2</summary>
-
-| Surface                        | `@grammyjs/i18n` 1.1.2                                                 | this plugin                                                                      |
-| ------------------------------ | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Flavor                         | additive `I18nFlavor` (`Context & I18nFlavor`)                         | transformative `I18nextFlavor<C>` (alias `I18nFlavor<C>`)                        |
-| `ctx.t` / `ctx.translate`      | same function, sync, Fluent `(key, vars)`                              | same per-update i18next `TFunction`, sync                                        |
-| `ctx.i18n.getLocale()`         | async, re-runs negotiation, ignores `useLocale`                        | sync string reflecting the in-flight locale (`await` still works)                |
-| `ctx.i18n.useLocale()`         | sync, no validation                                                    | `Promise<void>`; rebinds synchronously when nothing has to be loaded             |
-| `ctx.i18n.setLocale()`         | requires `useSession`, writes `session.__language_code`, re-negotiates | writes through `LocaleStore`; storage-agnostic                                   |
-| `ctx.i18n.renegotiateLocale()` | `Promise<void>`                                                        | alias of `renegotiate()`, `Promise<string>`                                      |
-| `ctx.i18n.fluent`              | the Fluent instance                                                    | `ctx.i18n.instance` (the i18next instance)                                       |
-| Negotiation order              | negotiator → session → `from.language_code` → default                  | store → negotiator (default `from.language_code`) → default                      |
-| `hears(key)`                   | standalone export, current locale only, no variables                   | `i18n.hears(key, { mode, variables })`, all locales by default                   |
-| Missing message                | `{path}` + `console.warn`                                              | native: the key; Fluent compat mode: `{path}`                                    |
-| Unknown variable/term/function | throws from `ctx.t`                                                    | Fluent's own `{$name}` fallback, reported via `onError`                          |
-| `globalTranslationContext`     | per-call context-derived variables                                     | not provided; use `interpolation.defaultVariables`, or pass variables explicitly |
-| `directory`                    | synchronous load in the constructor                                    | `loadFluentLocales()` / `loadLocales()` from `/loader`                           |
-| `useSession`                   | built-in session storage                                               | `localeStore: sessionLocaleStore()`                                              |
-| `fluentOptions.warningHandler` | Fluent warning callback                                                | `onError` on `createFluentI18next` / `createFluentFormat`                        |
-| `useIsolating`                 | Fluent default (`true`)                                                | same default                                                                     |
-
-</details>
-
-### What the differential tests guarantee
-
-Fluent mode is tested against the real `@grammyjs/i18n@1.1.2` `Fluent` class, loaded in-process over the same `.ftl` fixtures, in compat mode. Both engines are compared string by string.
-
-<details>
-<summary>Byte-identical output (12 feature groups)</summary>
-
-| Feature                                                           | Example                                                                              |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Simple, multiline, unicode, escaped messages                      | `Line one\nLine two`                                                                 |
-| Variables                                                         | `greeting = Hello, { $name }!`                                                       |
-| Message references, terms, term arguments, term attributes        | `{ -brand }`, `{ -thing(article: "indefinite") }`, `{ -titled.gender -> … }`         |
-| Select expressions and numeric variants                           | `{ $n -> [0] … *[other] … }`                                                         |
-| Plural categories                                                 | `en` one/other, `de` one/other, `ru` one/few/many                                    |
-| Message attributes, and the bare key of a message with attributes | `login.tooltip`, `login`                                                             |
-| `NUMBER()` and `DATETIME()`, including regional formats           | `NUMBER($amount, minimumFractionDigits: 2)` in `en`/`de`, `DATETIME(...)` in `de-DE` |
-| Custom `functions`                                                | `UPPER($word)`                                                                       |
-| Bidi isolation on and off                                         | `useIsolating: true` / `false`                                                       |
-| Region fallback and default-locale fallback                       | `de-AT → de`, `fr → en`                                                              |
-| Missing message, missing attribute, value-less message            | `{nope}`, `{login.nope}`, `""`                                                       |
-| Duplicate ids inside one source                                   | last definition wins                                                                 |
-
-</details>
-
-Intentional differences:
-
-| Case                                         | `@grammyjs/i18n`                                                        | this plugin                                                                                           |
-| -------------------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Unknown variable, message, term, or function | throws `ReferenceError` out of `ctx.t`                                  | renders Fluent's fallback (`{$name}`, `{nowhere}`, `{NOPE()}`, `{-nothing}`) and reports to `onError` |
-| Loading the same locale twice                | one bundle per load, the first match wins, the second load is invisible | one bundle per `locale\|namespace`; sources merge, and in compat mode later definitions override      |
-
-Beyond the FTL output, the API differences in the table above are deliberate too: `getLocale()` is synchronous and reflects `useLocale`, negotiation asks the store first, `hears` defaults to all locales, and the `{path}` rendering for missing messages only happens in compat mode.
-
 **This is not a drop-in replacement for everything.** The differential tests define the guarantee. Anything outside them needs to be looked at, especially code that relied on `ctx.t` throwing, on `globalTranslationContext`, or on the `Fluent` class itself.
+
+The [migration guide](https://github.com/HeeroML/grammy_i18next/blob/main/docs/migration.md) has the rest: the [surface-by-surface API differences](https://github.com/HeeroML/grammy_i18next/blob/main/docs/migration.md#api-differences) and [what the differential tests guarantee](https://github.com/HeeroML/grammy_i18next/blob/main/docs/migration.md#what-the-differential-tests-guarantee), byte-identical output and intentional differences included.
 
 ## Runtime support
 
@@ -525,26 +351,6 @@ Verified in CI on every push:
 | esbuild                 | browser/worker bundle check for `.`, `./v1`, `./v2`, `./fluent`; `./loader` is asserted to _not_ bundle for the browser          |
 
 The grammY versions exercised in CI are 1.46.0 (npm) and 2.0.0-beta.8 (JSR); both are pinned in the lockfile of the Node/Bun harness.
-
-## Debug logging
-
-The plugin logs through [`@grammyjs/debug`](https://jsr.io/@grammyjs/debug):
-
-```sh
-DEBUG=grammy:i18next deno run -A bot.ts        # locale resolution, loading
-DEBUG=grammy:i18next:fluent deno run -A bot.ts # Fluent bundle compilation
-DEBUG=grammy:i18next* deno run -A bot.ts       # both
-```
-
-## HTML escaping
-
-i18next escapes interpolated values by default (`interpolation.escapeValue: true`): `{{name}}` with the value `<b>` becomes `&lt;b&gt;`. That is exactly right when you send messages with `parse_mode: "HTML"`, and surprising when you send plain text. If you never use HTML parse mode, turn it off:
-
-```ts
-initOptions: {
-    interpolation: { escapeValue: false },
-}
-```
 
 ## Limitations
 

@@ -246,3 +246,33 @@ Deno.test("with supportedLocales only those and their variants are loaded on dem
         "en:translation",
     ]);
 });
+
+Deno.test("an unusually shaped locale needs i18next's supportedLngs to load from a backend", async () => {
+    const data = {
+        en: { translation: { greeting: "Hello" } },
+        "pirate speak": { translation: { greeting: "Ahoy" } },
+    };
+    const greet = async (initOptions: { supportedLngs?: string[] }) => {
+        const backend = fakeBackend(data);
+        const plugin = makePlugin({
+            i18next: i18next.createInstance().use(backend),
+            initOptions: { fallbackLng: "en", ...initOptions },
+            supportedLocales: ["en", "pirate speak"],
+        });
+        const greeting = await inMiddleware(
+            plugin,
+            makeContext("hi", "pirate speak"),
+            (ctx) => ctx.t("greeting"),
+        );
+        return [greeting, backend.requested.toSorted()];
+    };
+
+    // The plugin accepts the locale because it is configured, but i18next
+    // applies its own shape check before asking a backend and only trusts
+    // what its own options list.
+    expect(await greet({})).toEqual(["Hello", ["en:translation"]]);
+    expect(await greet({ supportedLngs: ["en", "pirate speak"] })).toEqual([
+        "Ahoy",
+        ["en:translation", "pirate speak:translation"],
+    ]);
+});

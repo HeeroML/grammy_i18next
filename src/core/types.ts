@@ -261,6 +261,10 @@ export interface I18nextOptions<
      * `de`). Other negotiated locales are still used, but not fetched, so
      * their translations come from the fallback language.
      *
+     * i18next has the final say on what it loads: a locale outside of its
+     * `supportedLngs`, or one with an unusual shape that its own options do
+     * not list, is not fetched. Keep the two options in line.
+     *
      * Defaults to the locales that currently have resources in the i18next
      * instance.
      */

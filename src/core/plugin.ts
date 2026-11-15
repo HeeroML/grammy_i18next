@@ -403,6 +403,22 @@ export class I18nextCore<
         if (supported !== undefined && supported.length > 0) {
             debug(`Preloading locales ${supported.join(", ")}`);
             await loadLanguages(this.instance, supported);
+            // i18next decides on its own which languages it loads: it skips
+            // those outside of its `supportedLngs` and those with an unusual
+            // shape that its own options do not list. It does so silently,
+            // and translations then come from the fallback language.
+            const preload = this.instance.options.preload;
+            const loaded = Array.isArray(preload) ? preload : [];
+            const skipped = supported.filter((locale) =>
+                !loaded.includes(locale)
+            );
+            if (skipped.length > 0) {
+                debug(
+                    `i18next did not load ${
+                        skipped.map(printableLocale).join(", ")
+                    }: list these locales in its \`supportedLngs\` option`,
+                );
+            }
         }
     }
 

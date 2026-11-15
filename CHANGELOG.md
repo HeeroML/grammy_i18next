@@ -22,6 +22,7 @@ The first stable release. It moves to i18next 27 and hardens the plugin against 
 - **Breaking:** `ctx.i18n.useLocale` and `ctx.i18n.setLocale` reject a locale that is neither configured nor shaped like a locale code, the same way they already rejected an empty one. `setLocale` does not write such a value to the store.
 - **Breaking:** with a lazy-loading backend, `supportedLocales` now also restricts on-demand loading to those locales and their regional variants (`de-AT` for `de`). A negotiated locale outside of that set is still used, but no longer fetched.
 - A negotiator that returns an empty string now yields the default locale instead of rejecting the update.
+- The debug log names the `supportedLocales` that i18next did not load at start-up, which happens for locales outside of its `supportedLngs` and, since i18next 27, for unusually shaped ones that its own options do not list.
 - The plugin's default locale is still `"dev"` when neither `defaultLocale` nor `fallbackLng` is set, although i18next 27 no longer falls back to `dev` on its own.
 
 ### Fixed

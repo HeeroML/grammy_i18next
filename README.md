@@ -14,7 +14,7 @@ The root export is the grammY 2 entrypoint (`.` and `./v2` are literally the sam
 
 This README covers the core usage and the migration in short. The rest lives in three documents:
 
-- [Advanced usage](https://github.com/HeeroML/grammy_i18next/blob/main/docs/advanced.md): backends and lazy loading, namespaces, loading files from disk, entrypoints and runtimes, typed keys, what the middleware does, concurrency, debug logging, HTML escaping.
+- [Advanced usage](https://github.com/HeeroML/grammy_i18next/blob/main/docs/advanced.md): backends and lazy loading, namespaces, loading files from disk, entrypoints and runtimes, typed keys, what the middleware does, concurrency, debug logging, untrusted input, HTML escaping.
 - [Fluent compatibility mode](https://github.com/HeeroML/grammy_i18next/blob/main/docs/fluent.md): the full `/fluent` documentation, its options, and how it works.
 - [Migrating from `@grammyjs/i18n`](https://github.com/HeeroML/grammy_i18next/blob/main/docs/migration.md): the full migration guide, the API differences, and the differential test guarantees.
 
@@ -33,10 +33,10 @@ For npm-compatible package managers, JSR recommends pnpm over npm and Yarn, beca
 Bun needs the exact version as long as this package has only prerelease versions:
 
 ```sh
-bun add @heeroml/grammy-i18next@npm:@jsr/heeroml__grammy-i18next@2.0.0-beta.1
+bun add @heeroml/grammy-i18next@npm:@jsr/heeroml__grammy-i18next@2.0.0-beta.2
 ```
 
-i18next itself is runtime-agnostic and dependency-free; it is published on [npm](https://www.npmjs.com/package/i18next) and mirrored on [JSR](https://jsr.io/@i18next/i18next).
+i18next itself is runtime-agnostic and dependency-free; it is published on [npm](https://www.npmjs.com/package/i18next) and mirrored on [JSR](https://jsr.io/@i18next/i18next). This package depends on i18next `^27.1.2`. If your bot lists i18next as a dependency of its own (for example to create the instance yourself), use a 27.x range there too, so that both resolve to one copy.
 
 ## Quick start
 
@@ -162,20 +162,22 @@ For each update, the first of these that yields a locale wins:
 
 1. The locale store (`localeStore.read`), if configured.
 2. The locale negotiator (`localeNegotiator`), which defaults to reading `ctx.from?.language_code`.
-3. The default locale: the `defaultLocale` option, else the first configured `fallbackLng`, else `"dev"` (which is what i18next itself falls back to).
+3. The default locale: the `defaultLocale` option, else the first configured `fallbackLng`, else `"dev"` (i18next's default `fallbackLng` up to i18next 26, kept here as the placeholder; set `fallbackLng` or `defaultLocale`).
 
 Locale codes are normalized before use: `_` becomes `-`, then i18next's own `formatLanguageCode` canonicalizes the result. `pt_BR` and `pt-br` both become `pt-BR`.
 
+A locale that arrives with an update or comes back from a store is data, not configuration, so it is checked before it is used. A value is accepted if it is shaped like a locale code (letters, digits, `-`, `_`, `@`, `.`; no `..`; at most 128 characters; i18next's `isSafeLanguageCode`), or if you configured it yourself (it is one of `supportedLocales` or has resources on the instance). Anything else from the store is ignored and the negotiator runs; anything else from the negotiator yields the default locale. `ctx.i18n.getLocale()` therefore never returns markup, a path, or a megabyte of text. See [Untrusted input](https://github.com/HeeroML/grammy_i18next/blob/main/docs/advanced.md#untrusted-input).
+
 ### Controls on `ctx.i18n`
 
-| Member                | Type              | Notes                                                                                                                                                                                                                                                                                                                                                             |
-| --------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getLocale()`         | `string`          | Synchronous, and reflects the locale in flight for this update, including changes made via `useLocale`.                                                                                                                                                                                                                                                           |
-| `useLocale(locale)`   | `Promise<void>`   | Uses the locale for the rest of this update. Rebinds `ctx.t` synchronously when nothing has to be loaded, so preloaded resources work without an `await`. Still, `await` it, because a lazy backend rebinds only after loading. Rejects on an empty locale, but **not** when a backend cannot deliver the locale: it is used anyway, with i18next's own fallback. |
-| `setLocale(locale)`   | `Promise<void>`   | `useLocale` plus `localeStore.write`. **If persistence fails, the locale stays in use for this update and the returned promise rejects with the store's error.**                                                                                                                                                                                                  |
-| `renegotiate()`       | `Promise<string>` | Runs the negotiator again and returns the locale now in use.                                                                                                                                                                                                                                                                                                      |
-| `renegotiateLocale()` | `Promise<string>` | Alias of `renegotiate()`, for `@grammyjs/i18n` compatibility.                                                                                                                                                                                                                                                                                                     |
-| `instance`            | `i18n`            | The shared i18next instance. Its global language is not per-update state; inside handlers, always use `ctx.t`.                                                                                                                                                                                                                                                    |
+| Member                | Type              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getLocale()`         | `string`          | Synchronous, and reflects the locale in flight for this update, including changes made via `useLocale`.                                                                                                                                                                                                                                                                                                                               |
+| `useLocale(locale)`   | `Promise<void>`   | Uses the locale for the rest of this update. Rebinds `ctx.t` synchronously when nothing has to be loaded, so preloaded resources work without an `await`. Still, `await` it, because a lazy backend rebinds only after loading. Rejects on an empty locale and on one that is neither configured nor shaped like a locale code, but **not** when a backend cannot deliver the locale: it is used anyway, with i18next's own fallback. |
+| `setLocale(locale)`   | `Promise<void>`   | `useLocale` plus `localeStore.write`. **If persistence fails, the locale stays in use for this update and the returned promise rejects with the store's error.**                                                                                                                                                                                                                                                                      |
+| `renegotiate()`       | `Promise<string>` | Runs the negotiator again and returns the locale now in use.                                                                                                                                                                                                                                                                                                                                                                          |
+| `renegotiateLocale()` | `Promise<string>` | Alias of `renegotiate()`, for `@grammyjs/i18n` compatibility.                                                                                                                                                                                                                                                                                                                                                                         |
+| `instance`            | `i18n`            | The shared i18next instance. Its global language is not per-update state; inside handlers, always use `ctx.t`.                                                                                                                                                                                                                                                                                                                        |
 
 `ctx.translate` is the same function object as `ctx.t` at any moment; `ctx.t === ctx.translate` holds after every locale change.
 

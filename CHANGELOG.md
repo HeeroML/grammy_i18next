@@ -2,6 +2,34 @@
 
 Notable changes to `@heeroml/grammy-i18next`. The package major tracks grammY 2; while grammY 2 is in beta, only prereleases are published.
 
+## 2.0.0-beta.2 - Unreleased
+
+Moves to i18next 27 and hardens the plugin against untrusted locale codes. grammY 2 itself is unchanged: `2.0.0-beta.8` is still its newest release. Entries that break code written against 2.0.0-beta.1 are marked **breaking**.
+
+### Security
+
+- Locale codes that arrive with an update (`from.language_code` via the negotiator) or from a locale store are validated before they are used. Previously any string was applied as the locale, so a forged or hand-crafted update could put markup, a path such as `../../etc/passwd`, control characters, or an arbitrarily long string into `ctx.i18n.getLocale()`, into a custom `LocaleStore`, and, on i18next 26, into the `lng` argument of a backend's `read` (the current `i18next-fs-backend` rejects path traversal on its own; a custom or older backend may not). A value is now accepted only if it is shaped like a locale code (i18next's `isSafeLanguageCode`) or is a locale you configured. A rejected stored locale makes the negotiator run; a rejected negotiated locale yields the default locale.
+- On-demand loading from a backend is bounded. i18next keeps every language it ever loaded registered on the instance (`options.preload`, the backend connector, the resource store) and walks all of them on each further load, so updates carrying many distinct locale codes made every later load slower: in a measurement, the second thousand distinct codes took 79 seconds of blocked event loop. The plugin now fetches at most 500 locales on demand; further ones are used without being fetched and fall back along i18next's language hierarchy. `supportedLocales` are loaded at start-up and do not count.
+- The Fluent format module no longer remembers a lookup miss for every locale it is asked about. That set grew by one entry per distinct locale code for the lifetime of the process.
+- Debug logs quote, truncate, and escape locale values that were not accepted, so they cannot forge log lines.
+- i18next `^27.1.2` is required. Besides refusing unsafe language codes itself, it bounds the caches that request-supplied language codes used to grow without limit (i18next 26.4.0 grew by about 300 bytes per distinct code in a measurement here).
+
+### Changed
+
+- **Breaking:** requires i18next `^27.1.2` (was `^26.4.0`). i18next 27 needs Node.js 22 or newer and changes a few defaults that are visible through `ctx.t`: `fallbackLng` defaults to `false` instead of `["dev"]`, `returnEmptyString` defaults to `false`, the default escape function no longer escapes `/`, and the TypeScript option `strictInterpolationChecks` defaults to `true` (a `t()` call can no longer pass `undefined` as its options). See the [i18next migration guide](https://www.i18next.com/misc/migration-guide). If your bot depends on i18next directly, move that range to 27 as well so that only one copy is installed.
+- **Breaking:** `ctx.i18n.useLocale` and `ctx.i18n.setLocale` reject a locale that is neither configured nor shaped like a locale code, the same way they already rejected an empty one. `setLocale` does not write such a value to the store.
+- **Breaking:** with a lazy-loading backend, `supportedLocales` now also restricts on-demand loading to those locales and their regional variants (`de-AT` for `de`). A negotiated locale outside of that set is still used, but no longer fetched.
+- A negotiator that returns an empty string now yields the default locale instead of rejecting the update.
+- The plugin's default locale is still `"dev"` when neither `defaultLocale` nor `fallbackLng` is set, although i18next 27 no longer falls back to `dev` on its own.
+
+### Fixed
+
+- Fluent compatibility mode keeps rendering a message that has attributes but no value as `""` on i18next 27, whose new `returnEmptyString: false` default would have turned it into `{key}`. The result no longer depends on that option.
+
+### Repository
+
+- The CI workflow runs with a read-only `GITHUB_TOKEN`; only the publish job requests the OIDC token it needs.
+
 ## 2.0.0-beta.1 - 2026-09-01
 
 A rewrite around a grammY-version-independent core, so that one implementation can serve both grammY majors. Entries that break code written against 2.0.0-beta.0 are marked **breaking**.

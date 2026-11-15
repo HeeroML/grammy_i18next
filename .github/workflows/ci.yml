@@ -7,6 +7,11 @@ on:
     pull_request:
     workflow_dispatch:
 
+# The verification jobs only read the repository. The publish job widens this
+# for itself (OIDC `id-token`), and nothing else gets write access.
+permissions:
+    contents: read
+
 # Three verification jobs, one per runtime the package claims to support.
 # `deno` is the primary one (it is the publishing toolchain); `node` and `bun`
 # run the same ./smoke suite from the dev-only package.json, which is how the

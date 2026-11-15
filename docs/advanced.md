@@ -19,7 +19,7 @@ Web app    grammY bot
 
 Any [i18next backend](https://www.i18next.com/overview/plugins-and-utils#backends) works. The plugin detects an attached backend and then:
 
-- loads the resources of a negotiated locale on demand (via `loadLanguages`) before binding `ctx.t`, deduplicated per locale, so lazily loaded locales work without further setup;
+- loads the resources of a negotiated locale on demand (via `loadLanguages`) before binding `ctx.t`, deduplicated per locale, so lazily loaded locales work without further setup. With `supportedLocales`, only those locales and their regional variants (`de-AT` for `de`) are fetched, and in every case at most 500 locales are fetched on demand over the lifetime of the plugin (see [Untrusted input](#untrusted-input));
 - loads the namespaces bound via the `ns` option once when the plugin becomes ready, so that every locale negotiated later fetches them too;
 - preloads `supportedLocales` when the plugin becomes ready.
 
@@ -128,9 +128,24 @@ DEBUG=grammy:i18next:fluent deno run -A bot.ts # Fluent bundle compilation
 DEBUG=grammy:i18next* deno run -A bot.ts       # both
 ```
 
+## Untrusted input
+
+The locale of an update is chosen by whoever sent the update. `from.language_code` is set by the Telegram client, and a bot whose webhook is reachable without a [secret token](https://core.telegram.org/bots/api#setwebhook) accepts updates from anybody. A locale store hands back whatever was written to it earlier. The plugin treats both as untrusted:
+
+- A locale is only used if it is shaped like a locale code (i18next's `isSafeLanguageCode`: letters, digits, `-`, `_`, `@`, `.`; no `..`; at most 128 characters; not a prototype key) or if you configured it (`supportedLocales`, or a locale with resources on the instance). A rejected stored locale makes the negotiator run, a rejected negotiated locale yields the default locale, and `ctx.i18n.useLocale` / `setLocale` reject, so passing user input to them is safe. Nothing else reaches `ctx.i18n.getLocale()`, a backend, or the store.
+- A well-shaped locale is not necessarily one you have. `"xx"` and `"zz-123"` pass the check and are used, with translations falling back to `fallbackLng`. If your code needs one of _your_ locales (to build a URL, to pick a database column), compare `ctx.i18n.getLocale()` against your own list.
+- With a backend, a locale without resources is fetched on demand, and i18next keeps every language it ever loaded registered on the instance. To keep that bounded, the plugin fetches at most 500 locales on demand; further ones are used without being fetched. Set `supportedLocales` to the locales of your bot: they are loaded at start-up, do not count towards that bound, and restrict on-demand fetching to themselves and their regional variants. Setting i18next's own [`supportedLngs`](https://www.i18next.com/overview/configuration-options#languages-namespaces-resources) as well makes i18next skip every other locale entirely.
+- Debug logs quote and truncate locale values that were not accepted.
+
+What the plugin cannot decide for you is what goes into a message. Interpolation values such as a user's name are untrusted as well; see the next section.
+
 ## HTML escaping
 
-i18next escapes interpolated values by default (`interpolation.escapeValue: true`): `{{name}}` with the value `<b>` becomes `&lt;b&gt;`. That is exactly right when you send messages with `parse_mode: "HTML"`, and surprising when you send plain text. If you never use HTML parse mode, turn it off:
+i18next escapes interpolated values by default (`interpolation.escapeValue: true`): `{{name}}` with the value `<b>` becomes `&lt;b&gt;` (the characters `&`, `<`, `>`, `"`, and `'` are escaped; since i18next 27, `/` is not). That is exactly right when you send messages with `parse_mode: "HTML"`, and surprising when you send plain text.
+
+**Fluent mode does not escape anything.** The Fluent format module replaces i18next's interpolator, so `escapeValue` never runs, exactly as in `@grammyjs/i18n`. If you send Fluent messages with `parse_mode: "HTML"` (or Markdown), escape the variables you pass to `ctx.t` yourself; otherwise a user named `<a href="…">` writes markup into your bot's messages, or makes Telegram reject them.
+
+If you never use HTML parse mode in JSON mode, turn escaping off:
 
 ```ts
 initOptions: {

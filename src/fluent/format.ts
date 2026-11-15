@@ -158,6 +158,20 @@ class FluentMatch {
 }
 
 /**
+ * The marker that {@linkcode FluentFormat.getResource} returns in compat mode
+ * for a message that has attributes but no value, which `@grammyjs/i18n`
+ * renders as `""`.
+ *
+ * Returning the empty string itself would only work with i18next's
+ * `returnEmptyString: true`. That was the default up to i18next 26; from
+ * i18next 27 an empty lookup result counts as a missing key, so the hit has to
+ * be something i18next does not interpret.
+ */
+class FluentEmptyMatch {}
+
+const EMPTY_MATCH = new FluentEmptyMatch();
+
+/**
  * The subset of i18next's `i18nFormat` contract that is actually invoked by
  * `Translator`.
  *
@@ -281,8 +295,8 @@ export class FluentFormat implements I18nFormatHook {
      * @param ns The namespace i18next is currently trying.
      * @param key The whole key; never pre-split, because `keySeparator` is off.
      * @param _options The full `t()` option bag (unused).
-     * @returns A marker for `parse`, `""` for a value-less message in compat
-     *     mode, or `undefined` to let i18next continue its fallback chain.
+     * @returns A marker for `parse`, or `undefined` to let i18next continue
+     *     its fallback chain.
      */
     getResource(
         lng: string,
@@ -302,7 +316,9 @@ export class FluentFormat implements I18nFormatHook {
             if (pattern === undefined) return undefined;
             return new FluentMatch(bundle, pattern, lng, ns);
         }
-        if (message.value === null) return this.#compat ? "" : undefined;
+        if (message.value === null) {
+            return this.#compat ? EMPTY_MATCH : undefined;
+        }
         return new FluentMatch(bundle, message.value, lng, ns);
     }
 
@@ -353,7 +369,7 @@ export class FluentFormat implements I18nFormatHook {
             }
             return formatted;
         }
-        if (res === "") return "";
+        if (res instanceof FluentEmptyMatch || res === "") return "";
         if (res === undefined || res === null) {
             return this.#compat ? `{${key}}` : key;
         }
@@ -400,13 +416,20 @@ export class FluentFormat implements I18nFormatHook {
 
     #compile(lng: string, ns: string): void {
         const key = bundleKey(lng, ns);
-        this.#compiled.add(key);
         this.#reported.delete(key);
         const source = this.#sourceOf(lng, ns);
         if (source === undefined) {
             this.#bundles.delete(key);
+            // A miss is only worth remembering when the store holds something
+            // for this pair. i18next looks every requested language up here,
+            // including ones that arrive with an update and have no resources
+            // at all; remembering those would grow without bound.
+            if (this.#storeValue(lng, ns) === undefined) {
+                this.#compiled.delete(key);
+            } else this.#compiled.add(key);
             return;
         }
+        this.#compiled.add(key);
         const bundle = new FluentBundle(lng, this.#bundleOptionsFor(lng));
         const errors = bundle.addResource(new FluentResource(source), {
             allowOverrides: this.#allowOverrides,
@@ -427,7 +450,7 @@ export class FluentFormat implements I18nFormatHook {
     }
 
     #sourceOf(lng: string, ns: string): string | undefined {
-        const value = this.#i18next?.store?.data?.[lng]?.[ns];
+        const value = this.#storeValue(lng, ns);
         if (value === undefined || value === null) return undefined;
         if (typeof value === "string") return value;
         if (typeof value === "object") {
@@ -452,6 +475,13 @@ export class FluentFormat implements I18nFormatHook {
                 `expected raw FTL text or { ${FLUENT_SOURCE_KEY}: string }`,
         }, bundleKey(lng, ns));
         return undefined;
+    }
+
+    #storeValue(lng: string, ns: string): unknown {
+        const data = this.#i18next?.store?.data;
+        if (data === undefined || !Object.hasOwn(data, lng)) return undefined;
+        const namespaces = data[lng];
+        return Object.hasOwn(namespaces, ns) ? namespaces[ns] : undefined;
     }
 
     #bundleOptionsFor(locale: string): FluentBundleOptions {

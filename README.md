@@ -6,7 +6,7 @@ For every update, this plugin resolves the user's locale and installs a translat
 
 There is one implementation and one entrypoint per grammY major. All behaviour lives in a version-independent core that needs nothing from a context object but `ctx.from?.language_code` and `ctx.hasText()`. `./v1` and `./v2` add only the `Context`, `MiddlewareObj`, and `HearsContext` types of the major you installed. Neither entrypoint imports grammY at runtime, only as types.
 
-> Status: beta. This package tracks the grammY 2.0 betas (`@grammyjs/grammy@2.0.0-beta.x`) and follows the [plugin migration guidance](https://github.com/grammyjs/grammY/issues/709) for grammY 2 (transformative context flavors, no custom context classes). A stable release will land together with grammY 2.0. Should the grammY organization adopt this plugin, it will be republished under their scope and this package archived with a final version that re-exports the new one.
+> Status: stable. `./v1` targets the stable grammY 1.x line. The grammY 2 entrypoint is built against the grammY 2.0 betas (`@grammyjs/grammy@2.0.0-beta.x`, the newest grammY 2 release so far) and follows the [plugin migration guidance](https://github.com/grammyjs/grammY/issues/709) for grammY 2 (transformative context flavors, no custom context classes). If grammY 2 changes incompatibly before its own stable release, the grammY 2 entrypoint follows in a new major version of this package. Should the grammY organization adopt this plugin, it will be republished under their scope and this package archived with a final version that re-exports the new one.
 
 The root export is the grammY 2 entrypoint (`.` and `./v2` are literally the same module). I kept it that way because the only published version of this package targeted grammY 2, and the package major tracks grammY 2. For grammY 1.x, import from `@heeroml/grammy-i18next/v1`. The plugin, its options, and its behaviour are identical there.
 
@@ -30,10 +30,10 @@ npx jsr add @heeroml/grammy-i18next
 
 For npm-compatible package managers, JSR recommends pnpm over npm and Yarn, because those install a separate copy of a JSR package for every dependent.
 
-Bun needs the exact version as long as this package has only prerelease versions:
+Bun installs it through the npm-compatibility registry:
 
 ```sh
-bun add @heeroml/grammy-i18next@npm:@jsr/heeroml__grammy-i18next@2.0.0-beta.2
+bunx jsr add @heeroml/grammy-i18next
 ```
 
 i18next itself is runtime-agnostic and dependency-free; it is published on [npm](https://www.npmjs.com/package/i18next) and mirrored on [JSR](https://jsr.io/@i18next/i18next). This package depends on i18next `^27.1.2`. If your bot lists i18next as a dependency of its own (for example to create the instance yourself), use a 27.x range there too, so that both resolve to one copy.
@@ -362,7 +362,7 @@ The grammY versions exercised in CI are 1.46.0 (npm) and 2.0.0-beta.8 (JSR); bot
 - `keyPrefix` and `returnObjects` do not apply in Fluent mode. Fluent messages always format to a string, and the key is never split.
 - `useLocale` without `await` is only safe for preloaded resources. With a lazy backend, `ctx.t` rebinds when loading finished.
 - A lazily loaded locale that failed to load is not fetched again automatically. i18next stops asking the backend for a failed language/namespace pair after its own retries; `instance.reloadResources()` forces a re-read.
-- This package is beta, tracking a grammY major that is itself in beta.
+- grammY 2 is still in beta. The `.` / `./v2` entrypoint is verified against `2.0.0-beta.8`; `./v1` targets the stable grammY 1.x line.
 
 ## License
 

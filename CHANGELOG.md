@@ -1,10 +1,12 @@
 # Changelog
 
-Notable changes to `@heeroml/grammy-i18next`. The package major tracks grammY 2; while grammY 2 is in beta, only prereleases are published.
+Notable changes to `@heeroml/grammy-i18next`. The package major tracks grammY 2.
 
-## 2.0.0-beta.2 - Unreleased
+## 2.0.0 - Unreleased
 
-Moves to i18next 27 and hardens the plugin against untrusted locale codes. grammY 2 itself is unchanged: `2.0.0-beta.8` is still its newest release. Entries that break code written against 2.0.0-beta.1 are marked **breaking**.
+The first stable release. It moves to i18next 27 and hardens the plugin against untrusted locale codes. Entries that break code written against 2.0.0-beta.1 are marked **breaking**.
+
+`./v1` targets the stable grammY 1.x line, which is why the package no longer carries a prerelease tag. grammY 2 itself is still in beta (`2.0.0-beta.8` is its newest release); the `.` / `./v2` entrypoint is built against it. Should grammY 2 change incompatibly before its stable release, that entrypoint follows in a new major version of this package.
 
 ### Security
 

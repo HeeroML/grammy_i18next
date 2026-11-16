@@ -69,7 +69,7 @@ Surface-by-surface comparison with `@grammyjs/i18n` 1.1.2:
 | Flavor                         | additive `I18nFlavor` (`Context & I18nFlavor`)                         | transformative `I18nextFlavor<C>` (alias `I18nFlavor<C>`)                        |
 | `ctx.t` / `ctx.translate`      | same function, sync, Fluent `(key, vars)`                              | same per-update i18next `TFunction`, sync                                        |
 | `ctx.i18n.getLocale()`         | async, re-runs negotiation, ignores `useLocale`                        | sync string reflecting the in-flight locale (`await` still works)                |
-| `ctx.i18n.useLocale()`         | sync, no validation                                                    | `Promise<void>`; rebinds synchronously when nothing has to be loaded             |
+| `ctx.i18n.useLocale()`         | sync, no validation                                                    | `Promise<void>`; rebinds synchronously when nothing has to be loaded; validated  |
 | `ctx.i18n.setLocale()`         | requires `useSession`, writes `session.__language_code`, re-negotiates | writes through `LocaleStore`; storage-agnostic                                   |
 | `ctx.i18n.renegotiateLocale()` | `Promise<void>`                                                        | alias of `renegotiate()`, `Promise<string>`                                      |
 | `ctx.i18n.fluent`              | the Fluent instance                                                    | `ctx.i18n.instance` (the i18next instance)                                       |

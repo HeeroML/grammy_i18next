@@ -111,6 +111,10 @@ export interface I18nextControls {
      * hierarchy, and the failure is reported through the i18next instance's
      * `failedLoading` event rather than by rejecting this promise.
      *
+     * The promise rejects for an empty locale and for one that is neither
+     * configured (`supportedLocales`, or resources on the instance) nor shaped
+     * like a locale code, so user input can be passed here directly.
+     *
      * @param locale The locale to use for the rest of this update.
      */
     useLocale(locale: string): Promise<void>;
@@ -217,11 +221,17 @@ export interface I18nextOptions<
      * The locale to use when negotiation fails, i.e. when the locale
      * negotiator returns `undefined`. Defaults to the first configured
      * `fallbackLng` of the i18next instance, and to `"dev"` if there is none.
+     *
+     * This locale is configuration and is used as it is; locales that arrive
+     * with an update or from the locale store are validated first.
      */
     defaultLocale?: string;
     /**
      * A custom locale negotiator determining the locale of each update. The
      * default negotiator reads `ctx.from?.language_code`.
+     *
+     * The result is treated as untrusted: a value that is neither configured
+     * nor shaped like a locale code yields the default locale.
      */
     localeNegotiator?: LocaleNegotiator<C>;
     /**
@@ -245,6 +255,15 @@ export interface I18nextOptions<
      * backend is attached—these locales are preloaded when the plugin becomes
      * ready. Preloading is required for `hears`, because a synchronous
      * predicate cannot fetch translations on demand.
+     *
+     * With a lazy-loading backend, setting this also restricts on-demand
+     * loading to these locales and their regional variants (`de-AT` for
+     * `de`). Other negotiated locales are still used, but not fetched, so
+     * their translations come from the fallback language.
+     *
+     * i18next has the final say on what it loads: a locale outside of its
+     * `supportedLngs`, or one with an unusual shape that its own options do
+     * not list, is not fetched. Keep the two options in line.
      *
      * Defaults to the locales that currently have resources in the i18next
      * instance.

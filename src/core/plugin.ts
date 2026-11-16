@@ -7,7 +7,13 @@ import i18next, {
     type TOptions,
 } from "i18next";
 import { installI18nextProperties } from "./install.ts";
-import { firstFallbackLocale, normalizeLocale } from "./locale.ts";
+import {
+    firstFallbackLocale,
+    isSafeLocale,
+    localeChain,
+    normalizeLocale,
+    printableLocale,
+} from "./locale.ts";
 import { defaultLocaleNegotiator } from "./negotiator.ts";
 import type {
     ContextLike,
@@ -18,6 +24,19 @@ import type {
 } from "./types.ts";
 
 const debug = createDebug("grammy:i18next");
+
+/**
+ * How many locales the plugin fetches from a lazy-loading backend on demand
+ * over its lifetime, not counting `supportedLocales`.
+ *
+ * Every language that i18next loads stays registered on the instance for good
+ * (in `options.preload`, the backend connector, and the resource store), and
+ * each further load walks all of them. Locale codes arrive with updates, so
+ * without a bound, updates carrying many distinct codes would make every later
+ * load slower and eventually stall the process. Real bots see far fewer
+ * distinct locales than this.
+ */
+const MAX_LAZY_LOCALES = 500;
 
 /**
  * The version-independent implementation of the i18next plugin for grammY.
@@ -59,6 +78,8 @@ export class I18nextCore<
 
     readonly #options: I18nextOptions<C, Ns>;
     readonly #loading = new Map<string, Promise<void>>();
+    readonly #lazyLocales = new Set<string>();
+    #supportedChain: Set<string> | undefined;
     #readiness: Promise<void> | undefined;
 
     /**
@@ -109,7 +130,8 @@ export class I18nextCore<
     get defaultLocale(): string {
         return this.#options.defaultLocale ??
             firstFallbackLocale(this.instance.options?.fallbackLng) ??
-            // "dev" is what i18next itself falls back to when nothing is set.
+            // "dev" was i18next's default `fallbackLng` up to i18next 26 and
+            // stays the placeholder locale here when nothing is configured.
             "dev";
     }
 
@@ -235,14 +257,9 @@ export class I18nextCore<
                 translate = this.#bindTranslator(normalized);
                 debug(`Using locale '${normalized}'`);
             };
-            const useLocale = (newLocale: string): Promise<void> => {
-                if (typeof newLocale !== "string" || newLocale.length === 0) {
-                    return Promise.reject(
-                        new Error(
-                            "Cannot use an empty locale for translations.",
-                        ),
-                    );
-                }
+            // Uses a locale that is already known to be acceptable: one that
+            // passed `#accepts`, or the developer-configured default locale.
+            const use = (newLocale: string): Promise<void> => {
                 const normalized = normalizeLocale(this.instance, newLocale);
                 const loading = this.#ensureLoaded(normalized);
                 // Rebinding synchronously whenever nothing has to be loaded
@@ -254,19 +271,51 @@ export class I18nextCore<
                 }
                 return loading.then(() => apply(normalized));
             };
+            const useLocale = (newLocale: string): Promise<void> => {
+                if (typeof newLocale !== "string" || newLocale.length === 0) {
+                    return Promise.reject(
+                        new Error(
+                            "Cannot use an empty locale for translations.",
+                        ),
+                    );
+                }
+                if (!this.#accepts(newLocale)) {
+                    return Promise.reject(
+                        new Error(
+                            `Cannot use the locale ${
+                                printableLocale(newLocale)
+                            } for translations: it is not a configured ` +
+                                "locale and it is not shaped like a locale " +
+                                "code (letters, digits, '-', '_', '@' and " +
+                                "'.', at most 128 characters).",
+                        ),
+                    );
+                }
+                return use(newLocale);
+            };
             const setLocale = async (newLocale: string): Promise<void> => {
                 await useLocale(newLocale);
                 // A failing store keeps the locale in flight for this update.
                 await store?.write(ctx, locale);
             };
             const renegotiate = async (): Promise<string> => {
-                const negotiated = await negotiator(ctx);
-                debug(
-                    negotiated == null
-                        ? `Negotiation failed, using default locale '${this.defaultLocale}'`
-                        : `Negotiated locale '${negotiated}'`,
-                );
-                await useLocale(negotiated ?? this.defaultLocale);
+                const negotiated: unknown = await negotiator(ctx);
+                // The negotiated value usually is the `language_code` of the
+                // update, i.e. data chosen by whoever sent it. A value that is
+                // not acceptable as a locale is treated like no value at all.
+                if (this.#accepts(negotiated)) {
+                    debug(`Negotiated locale '${negotiated}'`);
+                    await use(negotiated);
+                } else {
+                    debug(
+                        negotiated == null || negotiated === ""
+                            ? `Negotiation failed, using default locale '${this.defaultLocale}'`
+                            : `Ignoring negotiated locale ${
+                                printableLocale(negotiated)
+                            }, using default locale '${this.defaultLocale}'`,
+                    );
+                    await use(this.defaultLocale);
+                }
                 return locale;
             };
 
@@ -283,11 +332,16 @@ export class I18nextCore<
             });
 
             try {
-                const stored = await store?.read(ctx);
-                if (typeof stored === "string" && stored.length > 0) {
+                const stored: unknown = await store?.read(ctx);
+                if (this.#accepts(stored)) {
                     debug(`Restored locale '${stored}' from the locale store`);
-                    await useLocale(stored);
+                    await use(stored);
                 } else {
+                    if (typeof stored === "string" && stored.length > 0) {
+                        debug(
+                            `Ignoring stored locale ${printableLocale(stored)}`,
+                        );
+                    }
                     await renegotiate();
                 }
                 await next();
@@ -349,6 +403,22 @@ export class I18nextCore<
         if (supported !== undefined && supported.length > 0) {
             debug(`Preloading locales ${supported.join(", ")}`);
             await loadLanguages(this.instance, supported);
+            // i18next decides on its own which languages it loads: it skips
+            // those outside of its `supportedLngs` and those with an unusual
+            // shape that its own options do not list. It does so silently,
+            // and translations then come from the fallback language.
+            const preload = this.instance.options.preload;
+            const loaded = Array.isArray(preload) ? preload : [];
+            const skipped = supported.filter((locale) =>
+                !loaded.includes(locale)
+            );
+            if (skipped.length > 0) {
+                debug(
+                    `i18next did not load ${
+                        skipped.map(printableLocale).join(", ")
+                    }: list these locales in its \`supportedLngs\` option`,
+                );
+            }
         }
     }
 
@@ -368,6 +438,58 @@ export class I18nextCore<
             texts.add(this.t(locale, key, variables));
         }
         return [...texts];
+    }
+
+    /**
+     * Whether a value may be used as a locale: a safely shaped locale code,
+     * or—whatever its shape—a locale the developer configured, i.e. one of the
+     * `supportedLocales` or one that has resources on the instance.
+     */
+    #accepts(locale: unknown): locale is string {
+        if (typeof locale !== "string" || locale.length === 0) return false;
+        if (isSafeLocale(locale)) return true;
+        if (this.#options.supportedLocales?.includes(locale) === true) {
+            return true;
+        }
+        const data = this.instance.store?.data;
+        return data !== undefined && Object.hasOwn(data, locale);
+    }
+
+    /**
+     * Decides whether a locale that has no resources yet may be requested from
+     * the backend, and remembers it if so.
+     *
+     * With `supportedLocales`, only those locales and their regional variants
+     * (`de-AT` for `de`) are fetched; they are what the bot translates into.
+     * In every case the number of lazily fetched locales is bounded by
+     * {@link MAX_LAZY_LOCALES}. A locale that is not fetched is still used,
+     * with translations falling back along i18next's language hierarchy.
+     */
+    #mayLoad(code: string): boolean {
+        if (this.#lazyLocales.has(code)) return true;
+        const supported = this.#options.supportedLocales;
+        if (supported !== undefined && supported.length > 0) {
+            this.#supportedChain ??= new Set(
+                supported.map((locale) =>
+                    locale.replaceAll("_", "-").toLowerCase()
+                ),
+            );
+            const chain = this.#supportedChain;
+            if (!localeChain(code).some((parent) => chain.has(parent))) {
+                debug(`Not loading '${code}': not among the supported locales`);
+                return false;
+            }
+        }
+        if (this.#lazyLocales.size >= MAX_LAZY_LOCALES) {
+            debug(
+                `Not loading '${code}': already loaded ${MAX_LAZY_LOCALES} ` +
+                    "locales on demand. List the locales of your bot in " +
+                    "`supportedLocales` (and i18next's `supportedLngs`).",
+            );
+            return false;
+        }
+        this.#lazyLocales.add(code);
+        return true;
     }
 
     #hasBackend(): boolean {
@@ -406,7 +528,11 @@ export class I18nextCore<
         }
         const pending = this.#loading.get(code);
         if (pending !== undefined) return pending;
-        const loading = loadLanguages(this.instance, [code]).catch(
+        if (!this.#mayLoad(code)) return undefined;
+        const loading = loadLanguages(this.instance, [code]).then(
+            // Only loads in flight need the memo; afterwards the resources
+            // are in the store and nothing has to be loaded.
+            () => void this.#loading.delete(code),
             (error: unknown) => {
                 // Mirrors i18next's own `changeLanguage` contract: a locale
                 // whose resources cannot be loaded is still used, and

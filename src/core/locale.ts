@@ -1,4 +1,49 @@
-import type { FallbackLng, i18n } from "i18next";
+import { type FallbackLng, type i18n, isSafeLanguageCode } from "i18next";
+
+/**
+ * Whether a locale code has a shape that is safe to accept from outside the
+ * bot's own code: the `language_code` of an update, a value read back from a
+ * locale store, or user input handed to `ctx.i18n.setLocale`.
+ *
+ * This is i18next's own rule (`isSafeLanguageCode`): letters, digits, `-`,
+ * `_`, `@` and `.`, no `..`, at most 128 characters, and not a prototype key.
+ * It is deliberately not a BCP 47 check, so `en_US` and `sr@latin` pass. What
+ * it keeps out is everything a locale must never carry into a file path, a
+ * URL, markup, or a log line.
+ *
+ * @param locale The value to check.
+ * @returns `true` if the value is a non-empty, safely shaped locale code.
+ */
+export function isSafeLocale(locale: unknown): locale is string {
+    return typeof locale === "string" && isSafeLanguageCode(locale);
+}
+
+/**
+ * Renders an untrusted locale value for a log line: truncated, quoted, and
+ * with control characters escaped, so that it cannot forge log entries.
+ *
+ * @param locale The value to render.
+ * @returns A quoted, single-line representation of the value.
+ */
+export function printableLocale(locale: unknown): string {
+    return JSON.stringify(String(locale).slice(0, 64))
+        .replace(/[\u007f-\u009f]/g, "?");
+}
+
+/**
+ * Lists a locale code together with its less specific parents, lowercased:
+ * `zh-Hant-TW` yields `zh-hant-tw`, `zh-hant`, and `zh`. This mirrors the
+ * language hierarchy i18next resolves translations along.
+ *
+ * @param locale A hyphen-separated locale code.
+ * @returns The code and its parents, most specific first.
+ */
+export function localeChain(locale: string): string[] {
+    const parts = locale.toLowerCase().split("-");
+    return parts.map((_, index) =>
+        parts.slice(0, parts.length - index).join("-")
+    );
+}
 
 /**
  * Normalizes a locale code the way i18next does internally.

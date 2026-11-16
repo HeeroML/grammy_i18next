@@ -69,7 +69,7 @@ function same(
     variables?: Variables,
 ): string {
     const expected = fluent.translate(locale, key, variables);
-    const actual = i18next.getFixedT(locale)(key, variables);
+    const actual = i18next.getFixedT(locale)(key, variables ?? {});
     expect(actual).toBe(expected);
     return actual;
 }

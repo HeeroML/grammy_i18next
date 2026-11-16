@@ -2,7 +2,7 @@
 
 Notable changes to `@heeroml/grammy-i18next`. The package major tracks grammY 2.
 
-## 2.0.0 - Unreleased
+## 2.0.0 - 2026-11-16
 
 The first stable release. It moves to i18next 27 and hardens the plugin against untrusted locale codes. Entries that break code written against 2.0.0-beta.1 are marked **breaking**.
 
